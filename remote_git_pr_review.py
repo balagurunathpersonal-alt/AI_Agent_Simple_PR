@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 import requests
@@ -8,7 +9,7 @@ GITHUB_API_URL = "https://api.github.com"
 
 
 SUPPORTED_EXTENSIONS = {
-    # iOS / Apple
+    # Apple
     ".swift",
     ".m",
     ".mm",
@@ -44,7 +45,7 @@ SUPPORTED_EXTENSIONS = {
     ".css",
     ".scss",
 
-    # Config / data
+    # Data / config
     ".json",
     ".yaml",
     ".yml",
@@ -83,19 +84,34 @@ class GitHubPRClient:
     ):
         self.owner = owner
         self.repo = repo
-        self.pull_request_number = pull_request_number
+        self.pull_request_number = (
+            pull_request_number
+        )
 
-        self.token = os.environ["GITHUB_TOKEN"]
+        self.token = os.environ[
+            "GITHUB_TOKEN"
+        ]
 
     # ========================================================
-    # HTTP helpers
+    # HTTP
     # ========================================================
 
     def _headers(self) -> dict:
+
         return {
-            "Authorization": f"Bearer {self.token}",
-            "Accept": "application/vnd.github+json",
+            "Authorization":
+                f"Bearer {self.token}",
+
+            "Accept":
+                "application/vnd.github+json",
+
+            "X-GitHub-Api-Version":
+                "2026-03-10",
         }
+
+    # ========================================================
+    # File validation
+    # ========================================================
 
     def _is_supported_file(
         self,
@@ -117,16 +133,16 @@ class GitHubPRClient:
         filepath: str
     ) -> bool:
 
-        return ".." not in Path(filepath).parts
+        return (
+            ".."
+            not in Path(filepath).parts
+        )
 
     # ========================================================
-    # PR details
+    # PR Metadata
     # ========================================================
 
     def get_pull_request(self) -> dict:
-        """
-        Returns metadata about the configured pull request.
-        """
 
         print(
             "\n🔧 TOOL CALLED: "
@@ -135,7 +151,8 @@ class GitHubPRClient:
 
         url = (
             f"{GITHUB_API_URL}/repos/"
-            f"{self.owner}/{self.repo}/pulls/"
+            f"{self.owner}/"
+            f"{self.repo}/pulls/"
             f"{self.pull_request_number}"
         )
 
@@ -146,6 +163,7 @@ class GitHubPRClient:
         )
 
         if response.status_code != 200:
+
             return {
                 "error": (
                     f"GitHub returned "
@@ -159,40 +177,34 @@ class GitHubPRClient:
         return {
             "number": data["number"],
             "title": data["title"],
-            "description": (
-                data.get("body") or ""
-            ),
+            "description":
+                data.get("body") or "",
             "state": data["state"],
-            "author": (
-                data["user"]["login"]
-            ),
-            "source_branch": (
-                data["head"]["ref"]
-            ),
-            "source_sha": (
-                data["head"]["sha"]
-            ),
-            "target_branch": (
-                data["base"]["ref"]
-            ),
-            "commits": data["commits"],
-            "changed_files": (
-                data["changed_files"]
-            ),
-            "additions": data["additions"],
-            "deletions": data["deletions"],
+            "author":
+                data["user"]["login"],
+            "source_branch":
+                data["head"]["ref"],
+            "source_sha":
+                data["head"]["sha"],
+            "target_branch":
+                data["base"]["ref"],
+            "commits":
+                data["commits"],
+            "changed_files":
+                data["changed_files"],
+            "additions":
+                data["additions"],
+            "deletions":
+                data["deletions"],
         }
 
     # ========================================================
-    # Changed files
+    # Changed Files
     # ========================================================
 
     def get_pull_request_files(
         self
     ) -> list[dict]:
-        """
-        Returns files changed by the pull request.
-        """
 
         print(
             "\n🔧 TOOL CALLED: "
@@ -201,7 +213,8 @@ class GitHubPRClient:
 
         url = (
             f"{GITHUB_API_URL}/repos/"
-            f"{self.owner}/{self.repo}/pulls/"
+            f"{self.owner}/"
+            f"{self.repo}/pulls/"
             f"{self.pull_request_number}/files"
         )
 
@@ -222,6 +235,7 @@ class GitHubPRClient:
             )
 
             if response.status_code != 200:
+
                 return [
                     {
                         "error": (
@@ -232,14 +246,14 @@ class GitHubPRClient:
                     }
                 ]
 
-            page_files = response.json()
+            files = response.json()
 
-            if not page_files:
+            if not files:
                 break
 
-            all_files.extend(page_files)
+            all_files.extend(files)
 
-            if len(page_files) < 100:
+            if len(files) < 100:
                 break
 
             page += 1
@@ -248,7 +262,9 @@ class GitHubPRClient:
 
         for file in all_files:
 
-            filename = file["filename"]
+            filename = file[
+                "filename"
+            ]
 
             if not self._is_supported_file(
                 filename
@@ -257,56 +273,58 @@ class GitHubPRClient:
 
             reviewable_files.append(
                 {
-                    "filename": filename,
-                    "status": (
-                        file["status"]
-                    ),
-                    "additions": (
-                        file["additions"]
-                    ),
-                    "deletions": (
-                        file["deletions"]
-                    ),
-                    "changes": (
-                        file["changes"]
-                    ),
-                    "patch": (
+                    "filename":
+                        filename,
+
+                    "status":
+                        file["status"],
+
+                    "additions":
+                        file["additions"],
+
+                    "deletions":
+                        file["deletions"],
+
+                    "changes":
+                        file["changes"],
+
+                    "patch":
                         file.get(
                             "patch",
                             ""
-                        )
-                    ),
+                        ),
                 }
             )
 
         print(
-            "\n📁 Reviewable files:",
-            len(reviewable_files)
+            f"\n📁 Reviewable files: "
+            f"{len(reviewable_files)}"
         )
 
         return reviewable_files
 
     # ========================================================
-    # Read repository file
+    # Read File
     # ========================================================
 
     def read_repository_file(
         self,
         filepath: str
     ) -> str:
-        """
-        Reads a file from the PR source commit.
-        """
 
         print(
             "\n🔧 TOOL CALLED: "
-            f"read_repository_file({filepath})"
+            f"read_repository_file("
+            f"{filepath})"
         )
 
-        if not self._safe_path(filepath):
+        if not self._safe_path(
+            filepath
+        ):
+
             return (
                 "Access denied: "
-                "invalid file path"
+                "invalid file path."
             )
 
         pr = self.get_pull_request()
@@ -314,11 +332,14 @@ class GitHubPRClient:
         if "error" in pr:
             return pr["error"]
 
-        source_sha = pr["source_sha"]
+        source_sha = pr[
+            "source_sha"
+        ]
 
         url = (
             f"{GITHUB_API_URL}/repos/"
-            f"{self.owner}/{self.repo}/contents/"
+            f"{self.owner}/"
+            f"{self.repo}/contents/"
             f"{filepath}"
         )
 
@@ -332,23 +353,25 @@ class GitHubPRClient:
         )
 
         if response.status_code != 200:
+
             return (
                 f"Unable to read "
                 f"{filepath}. "
-                f"GitHub returned "
-                f"{response.status_code}."
+                f"Status: "
+                f"{response.status_code}"
             )
 
         data = response.json()
 
-        download_url = (
-            data.get("download_url")
+        download_url = data.get(
+            "download_url"
         )
 
         if not download_url:
+
             return (
-                f"No downloadable content "
-                f"found for {filepath}"
+                "No downloadable "
+                "content found."
             )
 
         file_response = requests.get(
@@ -361,6 +384,7 @@ class GitHubPRClient:
             file_response.status_code
             != 200
         ):
+
             return (
                 f"Unable to download "
                 f"{filepath}"
@@ -369,28 +393,240 @@ class GitHubPRClient:
         return file_response.text
 
     # ========================================================
-    # Post PR comment
+    # Get Patch
+    # ========================================================
+
+    def get_file_patch(
+        self,
+        filepath: str
+    ) -> str:
+
+        files = (
+            self.get_pull_request_files()
+        )
+
+        for file in files:
+
+            if (
+                file.get("filename")
+                == filepath
+            ):
+                return file.get(
+                    "patch",
+                    ""
+                )
+
+        return ""
+
+    # ========================================================
+    # Parse valid RIGHT-side diff lines
+    # ========================================================
+
+    def get_valid_diff_lines(
+        self,
+        filepath: str
+    ) -> set[int]:
+        """
+        Returns new-file line numbers that
+        exist in the GitHub PR diff.
+
+        These are valid RIGHT-side locations
+        for inline comments.
+        """
+
+        patch = self.get_file_patch(
+            filepath
+        )
+
+        if not patch:
+            return set()
+
+        valid_lines = set()
+
+        new_line_number = None
+
+        for line in patch.splitlines():
+
+            # Example:
+            #
+            # @@ -10,4 +10,6 @@
+            #
+            if line.startswith("@@"):
+
+                match = re.search(
+                    r"\+(\d+)",
+                    line
+                )
+
+                if match:
+
+                    new_line_number = int(
+                        match.group(1)
+                    )
+
+                continue
+
+            if new_line_number is None:
+                continue
+
+            # Removed line exists only
+            # on LEFT side.
+            if (
+                line.startswith("-")
+                and not line.startswith(
+                    "---"
+                )
+            ):
+                continue
+
+            # Addition
+            if (
+                line.startswith("+")
+                and not line.startswith(
+                    "+++"
+                )
+            ):
+
+                valid_lines.add(
+                    new_line_number
+                )
+
+                new_line_number += 1
+
+                continue
+
+            # Context line
+            if not line.startswith("\\"):
+
+                valid_lines.add(
+                    new_line_number
+                )
+
+                new_line_number += 1
+
+        return valid_lines
+
+    # ========================================================
+    # Inline PR comment
+    # ========================================================
+
+    def post_inline_review_comment(
+        self,
+        filepath: str,
+        line_number: int,
+        comment_body: str,
+    ) -> bool:
+
+        print(
+            "\n🚀 ACTION: "
+            "post_inline_review_comment("
+            f"{filepath}:"
+            f"{line_number})"
+        )
+
+        valid_lines = (
+            self.get_valid_diff_lines(
+                filepath
+            )
+        )
+
+        if (
+            line_number
+            not in valid_lines
+        ):
+
+            print(
+                "⚠️ Skipping inline "
+                "comment."
+            )
+
+            print(
+                f"Line {line_number} "
+                "is not part of the "
+                "PR diff."
+            )
+
+            return False
+
+        pr = self.get_pull_request()
+
+        if "error" in pr:
+
+            print(
+                "❌ Unable to get "
+                "PR commit SHA."
+            )
+
+            return False
+
+        commit_sha = pr[
+            "source_sha"
+        ]
+
+        url = (
+            f"{GITHUB_API_URL}/repos/"
+            f"{self.owner}/"
+            f"{self.repo}/pulls/"
+            f"{self.pull_request_number}/"
+            f"comments"
+        )
+
+        payload = {
+            "body": comment_body,
+            "commit_id": commit_sha,
+            "path": filepath,
+            "line": line_number,
+            "side": "RIGHT",
+        }
+
+        response = requests.post(
+            url,
+            headers=self._headers(),
+            json=payload,
+            timeout=30,
+        )
+
+        if response.status_code == 201:
+
+            print(
+                "✅ Inline comment "
+                "posted."
+            )
+
+            return True
+
+        print(
+            "\n❌ Failed to post "
+            "inline comment."
+        )
+
+        print(
+            f"Status: "
+            f"{response.status_code}"
+        )
+
+        print(
+            f"Response: "
+            f"{response.text}"
+        )
+
+        return False
+
+    # ========================================================
+    # General PR comment
     # ========================================================
 
     def post_pull_request_comment(
         self,
         comment_body: str
     ) -> bool:
-        """
-        Posts a normal PR conversation comment.
-
-        Call this only after human approval.
-        """
-
-        print(
-            "\n🚀 ACTION: "
-            "post_pull_request_comment()"
-        )
 
         url = (
             f"{GITHUB_API_URL}/repos/"
-            f"{self.owner}/{self.repo}/issues/"
-            f"{self.pull_request_number}/comments"
+            f"{self.owner}/"
+            f"{self.repo}/issues/"
+            f"{self.pull_request_number}/"
+            f"comments"
         )
 
         response = requests.post(
@@ -403,25 +639,21 @@ class GitHubPRClient:
         )
 
         if response.status_code == 201:
+
             print(
-                "\n✅ Review posted "
-                "successfully."
+                "\n✅ Summary comment "
+                "posted."
             )
 
             return True
 
         print(
-            "\n❌ Failed to post review."
+            "\n❌ Failed to post "
+            "summary comment."
         )
 
         print(
-            f"Status: "
-            f"{response.status_code}"
-        )
-
-        print(
-            f"Response: "
-            f"{response.text}"
+            response.text
         )
 
         return False

@@ -8,7 +8,7 @@ struct ProfileView: View {
         VStack {
             Text(viewModel.username)
 
-            Button("Load Profile") {
+            Button("Show Profile") {
                 viewModel.loadProfile()
             }
         }

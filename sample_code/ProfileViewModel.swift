@@ -2,13 +2,13 @@ import Foundation
 
 final class ProfileViewModel: ObservableObject {
 
-    @Published var username: String = ""
+    @Published var username: String = "Default User"
 
     func loadProfile() {
 
         Task {
             let profile = await fetchProfile()
-            self.username = profile.name.uppercased()
+            self.username = profile.name.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
 

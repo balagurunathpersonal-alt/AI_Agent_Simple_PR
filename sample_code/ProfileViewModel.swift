@@ -8,7 +8,7 @@ final class ProfileViewModel: ObservableObject {
 
         Task {
             let profile = await fetchProfile()
-            self.username = profile.name
+            self.username = profile.name.uppercased()
         }
     }
 

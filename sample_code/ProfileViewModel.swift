@@ -17,8 +17,9 @@ final class ProfileViewModel: ObservableObject {
         return Profile(
             name: "Balagurunath"
         )
+
         try! await Task.sleep(
-            for: .seconds(1)
+            for: .seconds(2)
         )
 
     }

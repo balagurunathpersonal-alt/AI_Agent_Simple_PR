@@ -3,17 +3,20 @@ import os
 from google import genai
 from google.genai import types
 
-from remote_git_pr_review import GitHubPRClient
-from review_models import PRReviewResult
+from github_pr_debug import GitHubPRDebugClient
+from review_models_debug import PRReviewResult
 
 
 # ============================================================
-# Configuration
+# CONFIGURATION
 # ============================================================
+
+# UPDATE THESE THREE VALUES
 
 GITHUB_OWNER = "balagurunathpersonal-alt"
 GITHUB_REPO = "AI_Agent_Simple_PR"
 PULL_REQUEST_NUMBER = 2
+
 
 GEMINI_MODEL = (
     "gemini-3.5-flash-lite"
@@ -21,21 +24,17 @@ GEMINI_MODEL = (
 
 
 # ============================================================
-# Gemini
+# CLIENTS
 # ============================================================
 
-client = genai.Client(
+gemini = genai.Client(
     api_key=os.environ[
         "GEMINI_API_KEY"
     ]
 )
 
 
-# ============================================================
-# GitHub
-# ============================================================
-
-github = GitHubPRClient(
+github = GitHubPRDebugClient(
     owner=GITHUB_OWNER,
     repo=GITHUB_REPO,
     pull_request_number=(
@@ -45,18 +44,21 @@ github = GitHubPRClient(
 
 
 # ============================================================
-# Agent Tools
+# AGENT TOOLS
 # ============================================================
 
 def get_pull_request() -> dict:
+    """
+    Get metadata for the pull request.
+    """
 
-    return (
-        github
-        .get_pull_request()
-    )
+    return github.get_pull_request()
 
 
 def get_pull_request_files() -> list[dict]:
+    """
+    List reviewable files changed by the PR.
+    """
 
     return (
         github
@@ -64,9 +66,35 @@ def get_pull_request_files() -> list[dict]:
     )
 
 
+def get_file_diff(
+    filepath: str
+) -> str:
+    """
+    Get the exact GitHub diff for one file.
+
+    Args:
+        filepath:
+            Repository-relative path.
+    """
+
+    return (
+        github
+        .get_file_diff(
+            filepath
+        )
+    )
+
+
 def read_repository_file(
     filepath: str
 ) -> str:
+    """
+    Read the complete file at the PR head commit.
+
+    Args:
+        filepath:
+            Repository-relative path.
+    """
 
     return (
         github
@@ -77,12 +105,12 @@ def read_repository_file(
 
 
 # ============================================================
-# Agent Prompt
+# REVIEW PROMPT
 # ============================================================
 
 prompt = f"""
-You are a senior software engineer performing a
-professional GitHub pull request review.
+You are a highly critical senior Architect and code reviewer,
+performing a GitHub pull request review.
 
 Repository:
 
@@ -95,99 +123,155 @@ Pull Request:
 
 AVAILABLE TOOLS
 
+1. get_pull_request()
+
+2. get_pull_request_files()
+
+3. get_file_diff(filepath)
+
+4. read_repository_file(filepath)
+
+
+============================================================
+MANDATORY REVIEW WORKFLOW
+============================================================
+
+
+STEP 1
+
+You MUST call:
+
 get_pull_request()
+
+Verify that you are reviewing the intended PR.
+
+
+STEP 2
+
+You MUST call:
 
 get_pull_request_files()
 
+Identify every changed source code or configuration file.
+
+
+STEP 3
+
+For EVERY changed reviewable file, you MUST call:
+
+get_file_diff(filepath)
+
+Do not skip this step.
+
+The GitHub diff is the primary source of truth
+for determining what this pull request changed.
+
+
+STEP 4
+
+Inspect every added and modified line carefully.
+
+Do not merely summarize the diff.
+
+Perform an actual defect review.
+
+
+STEP 5
+
+If the diff alone is insufficient to determine
+whether a change is correct, call:
+
 read_repository_file(filepath)
 
+Use the complete file to understand:
 
-REQUIRED WORKFLOW
-
-1. Call get_pull_request().
-
-2. Understand the purpose and size
-   of the pull request.
-
-3. Call get_pull_request_files().
-
-4. Inspect every relevant changed file.
-
-5. Carefully inspect the GitHub patches.
-
-6. When additional context is needed,
-   call:
-
-   read_repository_file(filepath)
-
-7. Review primarily problems introduced
-   or exposed by this pull request.
-
-
-INLINE COMMENT REQUIREMENT
-
-For every finding that refers to a
-specific changed line:
-
-Set line_number to the NEW-file line
-number shown on the RIGHT side of the
-pull request diff.
-
-Only provide a line_number when you
-are confident that the line exists
-inside the PR diff.
-
-Do NOT guess line numbers.
-
-If a finding applies to the file or
-architecture generally and does not
-belong to one exact changed line:
-
-Set line_number to null.
-
-
-FOCUS AREAS
-
-- correctness
-- crashes
-- error handling
-- concurrency
-- thread safety
-- memory management
-- architecture
-- security
-- performance
+- surrounding implementation
+- class responsibilities
+- state
+- dependencies
+- concurrency context
 - lifecycle
-- state management
-- API misuse
-- testability
+- calling patterns
 
 
-IOS-SPECIFIC REVIEW
+============================================================
+MANDATORY DEFECT CHECKLIST
+============================================================
 
-For Swift / iOS code also consider:
 
-- optionals
-- force unwraps
-- unsafe casts
+For EVERY changed code block, explicitly evaluate:
 
-- ARC
+1. Can this change cause a runtime crash?
 
-- retain cycles
+2. Can this change cause incorrect application behaviour?
 
-- weak / strong captures
+3. Can an exception or error escape unexpectedly?
+
+4. Can a nullable/optional value be accessed unsafely?
+
+5. Does the change introduce unsafe type conversion?
+
+6. Can the change create a race condition?
+
+7. Can it mutate shared state unsafely?
+
+8. Can it update UI state from an unsafe thread/actor?
+
+9. Can it create a memory leak or retain cycle?
+
+10. Can it leak credentials or sensitive information?
+
+11. Can it bypass validation, authentication
+    or authorization?
+
+12. Can it introduce a performance regression?
+
+13. Does it introduce behaviour that requires new tests?
+
+
+============================================================
+SWIFT / IOS MANDATORY CHECKS
+============================================================
+
+
+When the file contains Swift or Objective-C,
+specifically inspect newly added or modified uses of:
+
+- try!
+
+- force unwrap !
+
+- as!
+
+- fatalError()
+
+- preconditionFailure()
+
+- implicitly unwrapped optionals
+
+- Task
+
+- Task.detached
 
 - async / await
 
-- Task lifecycle
-
-- actor isolation
+- MainActor
 
 - @MainActor
 
+- actor
+
 - Sendable
 
-- SwiftUI state ownership
+- DispatchQueue
+
+- weak self
+
+- unowned self
+
+- escaping closures
+
+- delegates
 
 - @State
 
@@ -197,108 +281,189 @@ For Swift / iOS code also consider:
 
 - @Environment
 
-- UIKit lifecycle
+- ObservableObject
 
-- structured concurrency
-
-- cancellation
+- UIKit lifecycle methods
 
 
+A newly introduced:
+
+try!
+
+force unwrap
+
+or unsafe cast
+
+MUST be treated as suspicious and evaluated
+for possible runtime crash behaviour.
+
+
+============================================================
+IMPORTANT REVIEW BEHAVIOUR
+============================================================
+
+
+Do NOT assume code is correct merely because:
+
+- it compiles
+- it looks simple
+- the diff is small
+
+
+Do NOT ignore obvious unsafe constructs.
+
+Do NOT fabricate findings.
+
+Do NOT fabricate line numbers.
+
+Do NOT invent code.
+
+Every finding must be supported by code
+you actually inspected.
+
+
+============================================================
+LINE NUMBER RULE
+============================================================
+
+
+For a finding tied to a specific changed line:
+
+Set line_number to the NEW-file line number
+on the RIGHT side of the GitHub diff.
+
+
+Only assign a line number when you are confident
+that the line is visible in the PR patch.
+
+
+If the issue is architectural or file-wide:
+
+line_number must be null.
+
+
+============================================================
 SEVERITY
+============================================================
 
 
 CRITICAL
 
-Security vulnerability,
-data corruption,
-catastrophic production problem.
+Use when the change could cause:
+
+- severe security breach
+- major data corruption
+- catastrophic system failure
 
 
 HIGH
 
-Likely crash,
-incorrect behaviour,
-serious concurrency,
-memory,
-security,
-or architecture problem.
+Use when the change could cause:
+
+- likely runtime crash
+- incorrect production behaviour
+- serious concurrency defect
+- serious memory defect
+- significant security problem
 
 
 MEDIUM
 
-Important reliability,
-performance,
-architecture,
-maintainability,
-or testability problem.
+Use for:
+
+- reliability problems
+- architecture problems
+- performance problems
+- maintainability risks
+- testability problems
 
 
 LOW
 
-Useful but normally
-non-blocking improvement.
+Use for:
+
+- legitimate non-blocking improvements
 
 
-REVIEW RULES
+============================================================
+FINAL DECISION
+============================================================
 
-Never invent:
 
-- code
-- files
-- APIs
-- line numbers
-- behaviours
+REQUEST_CHANGES
 
-Only report findings supported by
-code that you inspected.
+Use when at least one finding should
+reasonably block the PR.
 
-Do not create findings simply to make
-the report longer.
 
-If the PR is good, report no findings.
+APPROVE_WITH_COMMENTS
 
-Testing recommendations should relate
-specifically to this pull request.
+Use for valid but non-blocking concerns.
+
+
+APPROVE
+
+Use only when no meaningful problems
+were identified.
+
+
+Do not produce findings simply to avoid APPROVE.
 """
 
 
 # ============================================================
-# Run Agent
+# START
 # ============================================================
 
 print()
 print("=" * 70)
-print(
-    "              STARTING PR REVIEW"
-)
+print("          AI PR REVIEW - DEBUG VERSION")
 print("=" * 70)
 
 
-response = (
-    client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            tools=[
-                get_pull_request,
-                get_pull_request_files,
-                read_repository_file,
-            ],
+# ============================================================
+# RUN AGENT
+# ============================================================
 
-            response_mime_type=(
-                "application/json"
-            ),
+response = gemini.models.generate_content(
+    model=GEMINI_MODEL,
+    contents=prompt,
+    config=types.GenerateContentConfig(
 
-            response_schema=(
-                PRReviewResult
-            ),
+        tools=[
+            get_pull_request,
+            get_pull_request_files,
+            get_file_diff,
+            read_repository_file,
+        ],
+
+        response_mime_type=(
+            "application/json"
         ),
-    )
+
+        response_schema=(
+            PRReviewResult
+        ),
+    ),
 )
 
 
 # ============================================================
-# Parse
+# RAW GEMINI OUTPUT
+# ============================================================
+
+print()
+print("=" * 70)
+print("RAW GEMINI RESPONSE")
+print("=" * 70)
+
+print(response.text)
+
+print("=" * 70)
+
+
+# ============================================================
+# STRUCTURED RESULT
 # ============================================================
 
 review = (
@@ -309,117 +474,142 @@ review = (
 )
 
 
+print()
+print("=" * 70)
+print("STRUCTURED REVIEW RESULT")
+print("=" * 70)
+
+print(
+    review.model_dump_json(
+        indent=2
+    )
+)
+
+print("=" * 70)
+
+
 # ============================================================
-# Console output
+# HUMAN-FRIENDLY RESULT
 # ============================================================
 
-def print_review(
-    result: PRReviewResult
-):
+print()
+print("=" * 70)
+print("AI PR REVIEW")
+print("=" * 70)
 
-    print()
-    print("=" * 70)
-    print(
-        "                  AI PR REVIEW"
-    )
-    print("=" * 70)
+print(
+    f"\nSummary:\n"
+    f"{review.pr_summary}"
+)
 
-    print(
-        f"\nSummary:\n"
-        f"{result.pr_summary}"
-    )
+print(
+    f"\nOverall Risk: "
+    f"{review.overall_risk.value}"
+)
 
-    print(
-        "\nOverall Risk: "
-        f"{result.overall_risk.value}"
-    )
+print("\nFiles Reviewed:")
 
-    print("\nFiles Reviewed:")
+if review.files_reviewed:
 
     for filepath in (
-        result.files_reviewed
+        review.files_reviewed
     ):
         print(
             f"- {filepath}"
         )
 
-    print("\nFindings:")
+else:
 
-    if not result.findings:
+    print("- None")
 
-        print(
-            "\n✅ No meaningful "
-            "findings."
-        )
 
-    else:
+print("\nFindings:")
 
-        for index, finding in enumerate(
-            result.findings,
-            start=1
-        ):
 
-            print()
-
-            print(
-                f"{index}. "
-                f"[{finding.severity.value}] "
-                f"{finding.title}"
-            )
-
-            print(
-                f"   Category: "
-                f"{finding.category}"
-            )
-
-            print(
-                f"   File: "
-                f"{finding.file}"
-            )
-
-            print(
-                f"   Line: "
-                f"{finding.line_number}"
-            )
-
-            print(
-                f"   Explanation: "
-                f"{finding.explanation}"
-            )
-
-            print(
-                f"   Why it matters: "
-                f"{finding.why_it_matters}"
-            )
-
-            print(
-                f"   Fix: "
-                f"{finding.suggested_fix}"
-            )
+if not review.findings:
 
     print(
-        "\nTesting Recommendations:"
+        "\n✅ No meaningful "
+        "findings detected."
     )
 
-    for test in (
-        result.testing_recommendations
+else:
+
+    for index, finding in enumerate(
+        review.findings,
+        start=1,
+    ):
+
+        print()
+
+        print(
+            f"{index}. "
+            f"[{finding.severity.value}] "
+            f"{finding.title}"
+        )
+
+        print(
+            f"   Category: "
+            f"{finding.category}"
+        )
+
+        print(
+            f"   File: "
+            f"{finding.file}"
+        )
+
+        print(
+            f"   Line: "
+            f"{finding.line_number}"
+        )
+
+        print(
+            f"   Explanation: "
+            f"{finding.explanation}"
+        )
+
+        print(
+            f"   Why it matters: "
+            f"{finding.why_it_matters}"
+        )
+
+        print(
+            f"   Suggested fix: "
+            f"{finding.suggested_fix}"
+        )
+
+
+print(
+    "\nTesting Recommendations:"
+)
+
+
+if review.testing_recommendations:
+
+    for recommendation in (
+        review.testing_recommendations
     ):
 
         print(
-            f"- {test}"
+            f"- {recommendation}"
         )
 
-    print(
-        "\nFinal Recommendation: "
-        f"{result.final_recommendation.value}"
-    )
+else:
 
-    print()
-    print("=" * 70)
+    print("- None")
+
+
+print(
+    "\nFinal Recommendation: "
+    f"{review.final_recommendation.value}"
+)
+
+print()
+print("=" * 70)
 
 
 # ============================================================
-# Inline comment formatting
+# INLINE COMMENT BUILDER
 # ============================================================
 
 def build_inline_comment(
@@ -430,7 +620,7 @@ def build_inline_comment(
         f"**🤖 AI Review "
         f"— {finding.severity.value}**\n\n"
 
-        f"**{finding.title}**\n\n"
+        f"### {finding.title}\n\n"
 
         f"{finding.explanation}\n\n"
 
@@ -443,7 +633,7 @@ def build_inline_comment(
 
 
 # ============================================================
-# Summary formatting
+# SUMMARY COMMENT BUILDER
 # ============================================================
 
 def build_summary_comment(
@@ -453,6 +643,8 @@ def build_summary_comment(
     comment = (
         "## 🤖 AI PR Review Summary\n\n"
 
+        "### Summary\n\n"
+
         f"{result.pr_summary}\n\n"
 
         "### Overall Risk\n\n"
@@ -461,20 +653,49 @@ def build_summary_comment(
         f"{result.overall_risk.value}"
         f"**\n\n"
 
-        "### Final Recommendation\n\n"
-
-        f"**"
-        f"{result.final_recommendation.value}"
-        f"**\n\n"
+        "### Findings\n\n"
     )
 
-    if (
-        result.testing_recommendations
-    ):
+
+    if not result.findings:
 
         comment += (
-            "### Testing Recommendations\n\n"
+            "✅ No meaningful "
+            "findings identified.\n\n"
         )
+
+    else:
+
+        for index, finding in enumerate(
+            result.findings,
+            start=1,
+        ):
+
+            comment += (
+                f"{index}. "
+                f"**[{finding.severity.value}] "
+                f"{finding.title}** "
+                f"— `{finding.file}`"
+            )
+
+            if (
+                finding.line_number
+                is not None
+            ):
+
+                comment += (
+                    f":{finding.line_number}"
+                )
+
+            comment += "\n"
+
+
+    comment += (
+        "\n### Testing Recommendations\n\n"
+    )
+
+
+    if result.testing_recommendations:
 
         for test in (
             result.testing_recommendations
@@ -484,55 +705,58 @@ def build_summary_comment(
                 f"- {test}\n"
             )
 
+    else:
+
+        comment += "- None\n"
+
+
     comment += (
-        "\n---\n"
+        "\n### Final Recommendation\n\n"
+
+        f"**"
+        f"{result.final_recommendation.value}"
+        f"**\n\n"
+
+        "---\n"
+
         "_AI-generated review. "
-        "Validate findings before "
-        "making engineering decisions._"
+        "Validate findings before making "
+        "engineering decisions._"
     )
+
 
     return comment
 
 
 # ============================================================
-# Show result
-# ============================================================
-
-print_review(
-    review
-)
-
-
-# ============================================================
-# Human approval
+# HUMAN APPROVAL
 # ============================================================
 
 print(
     "\n⚠️ Nothing has been "
-    "posted to GitHub yet."
+    "posted to GitHub."
 )
 
 
 approval = input(
-    "\nPublish AI review "
+    "\nPublish this debug review "
     "to GitHub? [y/N]: "
 )
 
 
 if (
-    approval
-    .strip()
-    .lower()
+    approval.strip().lower()
     == "y"
 ):
 
-    print(
-        "\nPublishing inline "
-        "review comments..."
-    )
-
     posted_count = 0
+
     skipped_count = 0
+
+
+    # --------------------------------------------------------
+    # Inline findings
+    # --------------------------------------------------------
 
     for finding in (
         review.findings
@@ -543,8 +767,10 @@ if (
             is None
         ):
 
+            print()
             print(
-                "\n⚠️ No exact line for:"
+                "⚠️ Finding has no "
+                "specific diff line:"
             )
 
             print(
@@ -555,11 +781,13 @@ if (
 
             continue
 
-        comment = (
+
+        inline_comment = (
             build_inline_comment(
                 finding
             )
         )
+
 
         success = (
             github
@@ -573,10 +801,11 @@ if (
                 ),
 
                 comment_body=(
-                    comment
+                    inline_comment
                 ),
             )
         )
+
 
         if success:
 
@@ -586,16 +815,22 @@ if (
 
             skipped_count += 1
 
-    # Always add small summary
-    summary = (
+
+    # --------------------------------------------------------
+    # Summary
+    # --------------------------------------------------------
+
+    summary_comment = (
         build_summary_comment(
             review
         )
     )
 
+
     github.post_pull_request_comment(
-        summary
+        summary_comment
     )
+
 
     print()
     print("=" * 70)
@@ -612,9 +847,9 @@ if (
 
     print("=" * 70)
 
+
 else:
 
     print(
-        "\n✅ Nothing was "
-        "published."
+        "\n✅ Nothing was published."
     )

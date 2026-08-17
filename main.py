@@ -360,6 +360,9 @@ APPROVE
 APPROVE_WITH_COMMENTS
 
 REQUEST_CHANGES
+
+# FINAL COMMENTS
+Add comments for the PR author, if any.
 """
 
 
@@ -370,7 +373,7 @@ REQUEST_CHANGES
 print()
 print("=" * 70)
 print(
-    "        STARTING AI PR REVIEW"
+    "        PR review"
 )
 print("=" * 70)
 
@@ -403,7 +406,7 @@ review_text = response.text
 print()
 print("=" * 70)
 print(
-    "              AI PR REVIEW"
+    "              PR REVIEW"
 )
 print("=" * 70)
 print()
@@ -438,7 +441,7 @@ if (
 ):
 
     github_comment = f"""
-## 🤖 AI PR Review
+## 🤖 PR Review
 
 {review_text}
 

@@ -471,10 +471,14 @@ APPROVE
 APPROVE_WITH_COMMENTS
 REQUEST_CHANGES
 
+COMMENTS:
+
+add comments for the PR author align with the FINAL RECOMMENDATION. Don't add phrase that the PR is handled using AI. Need detailed comments
+
 
 Do not invent findings just to produce a longer review.
 
-If the PR is good, say so clearly.
+If the PR is good, say so clearly. 
 """
 
 

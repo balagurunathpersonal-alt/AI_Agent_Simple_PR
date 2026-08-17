@@ -14,13 +14,13 @@ final class ProfileViewModel: ObservableObject {
 
     private func fetchProfile() async -> Profile {
 
+        return Profile(
+            name: "Balagurunath"
+        )
         try! await Task.sleep(
             for: .seconds(1)
         )
 
-        return Profile(
-            name: "Balagurunath"
-        )
     }
 }
 

@@ -13,7 +13,7 @@ from review_models import PRReviewResult
 
 GITHUB_OWNER = "balagurunathpersonal-alt"
 GITHUB_REPO = "AI_Agent_Simple_PR"
-PULL_REQUEST_NUMBER = 1
+PULL_REQUEST_NUMBER = 2
 
 GEMINI_MODEL = (
     "gemini-3.5-flash-lite"
